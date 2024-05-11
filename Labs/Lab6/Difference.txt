@@ -1,5 +1,5 @@
 The learning curves of SARSA and Q-learning show distinct differences that are closely linked to their exploration-exploitation strategies.
 SARSA's cautious and conservative approach arises from its on-policy nature which learns directly from the policy it follows. 
-This results in a smoother learning curve and reflects a more gradual but stable learning process with higher average rewards than Q-learning. 
+This results in a smoother learning curve and reflects a more gradual but stable learning process with higher average rewards as well as less variance than Q-learning. 
 Q-learning's off-policy nature leads to a more aggressive and optimistic exploration strategy and results in sharper fluctuations in the early stages of learning as it prioritizes the pursuit of the optimal policy. 
 These differences in approach and behavior are evident in the curves, with SARSA showcasing a more consistent and measured progression, while Q-learning exhibits more erratic behavior before while converging towards the optimal policy.
