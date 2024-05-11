@@ -72,7 +72,7 @@ def sarsa(env, episodes, epsilon, alpha, gamma):
 
     return rewards
 
-# Initialize environment and parameters
+# Initialize 
 env = gym.make('CliffWalking-v0')
 episodes = 1000
 epsilon = 0.1
@@ -93,7 +93,7 @@ for i in range(runs):
 q_learning_avg_rewards = np.mean(q_learning_rewards, axis=0)
 sarsa_avg_rewards = np.mean(sarsa_rewards, axis=0)
 
-# Plot average rewards over episodes for both algorithms
+# Plot 
 plt.plot(q_learning_avg_rewards, label='Q-Learning')
 plt.plot(sarsa_avg_rewards, label='SARSA')
 plt.xlabel('Episode')
