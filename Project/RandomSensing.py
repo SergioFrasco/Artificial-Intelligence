@@ -95,6 +95,7 @@ class RandomSensing(Player):
 
             if is_consistent:
                 updated_states.add(state)
+
         self.possible_states = updated_states
 
     # Get stockfish to choose a move for us
@@ -125,10 +126,18 @@ class RandomSensing(Player):
         # Find the move with the highest count
         majority_move = max(move_counts, key=move_counts.get)
 
-        # Print the chosen move
-        print(f"Chosen move: {majority_move}")
+        # Verify move validity
+        board = chess.Board(self.possible_states[0])  # Get the board position from the first possible state
+        if majority_move in board.legal_moves:
+            # Print the chosen move
+            print(f"Chosen move: {majority_move}")
+            return majority_move
+        else:
+            # Handle invalid move (e.g., select another move)
+            print("Chosen move is not valid. Selecting another move.")
+            # Example: return the first legal move as a fallback
+            return next(iter(board.legal_moves), None)
 
-        return majority_move
 
     # Update the board based on the result of our move
     def handle_move_result(self, requested_move, taken_move, captured_opponent_piece, capture_square):
