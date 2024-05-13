@@ -1,0 +1,2 @@
+export STOCKFISH_EXECUTABLE="/home/useradd/Artificial-Intelligence/Project/stockfish-windows-x86-64-avx2/stockfish/stockfish.exe"
+/stockfish-windows-x86-64-avx2/stockfish/stockfish.exe

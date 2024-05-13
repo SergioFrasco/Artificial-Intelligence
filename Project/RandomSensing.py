@@ -3,9 +3,12 @@
 
 import chess
 import chess.engine
-from reconchess import utilities
+from reconchess import *
 from stockfish import Stockfish
 import random
+import os
+
+STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
 
 class RandomSensing(Player):
     # Initialise the board and its attributes
@@ -15,7 +18,19 @@ class RandomSensing(Player):
         self.opponent_name = None
         self.my_piece_captured_square = None
         self.possible_states = set()
-        self.stockfish = Stockfish(path="C:\Users\Sergio\Documents\GitHub\Artificial-Intelligence\Project\stockfish-windows-x86-64-avx2\stockfish\stockfish.exe")
+
+        # make sure stockfish environment variable exists
+        if STOCKFISH_ENV_VAR not in os.environ:
+            raise KeyError(
+                'TroutBot requires an environment variable called "{}" pointing to the Stockfish executable'.format(
+                    STOCKFISH_ENV_VAR))
+
+        # make sure there is actually a file
+        stockfish_path = os.environ[STOCKFISH_ENV_VAR]
+        if not os.path.exists(stockfish_path):
+            raise ValueError('No stockfish executable found at "{}"'.format(stockfish_path))
+        
+        self.stockfish = Stockfish(path=stockfish_path)
         self.stockfish.set_depth(12)  # Adjust depth
 
     # Initialise the start of the game
@@ -72,10 +87,12 @@ class RandomSensing(Player):
         for state in self.possible_states:
             board = chess.Board(state)
             is_consistent = True
-            for square, piece in sense_result.items():
-                if board.piece_at(chess.parse_square(square)) != piece:
+            for s in sense_result:
+                square, piece = s
+                if board.piece_at(square) != piece:
                     is_consistent = False
                     break
+
             if is_consistent:
                 updated_states.add(state)
         self.possible_states = updated_states
