@@ -18,7 +18,7 @@ class RandomSensing(Player):
         self.stockfish = Stockfish(path="C:\Users\Sergio\Documents\GitHub\Artificial-Intelligence\Project\stockfish-windows-x86-64-avx2\stockfish\stockfish.exe")
         self.stockfish.set_depth(12)  # Adjust depth
 
-    # Implement other methods...
+    # Initialise the start of the game
     def handle_game_start(self, color, board, opponent_name):
         self.color = color
         self.board = board
