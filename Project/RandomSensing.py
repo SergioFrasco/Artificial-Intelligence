@@ -1,5 +1,5 @@
 # Sergio Frasco (2427724)
-# Tristan Dos Remendos ()
+# Tristan Dos Remendos (2465830)
 
 import chess
 import chess.engine
