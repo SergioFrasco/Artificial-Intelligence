@@ -30,8 +30,8 @@ class RandomSensing(Player):
         if not os.path.exists(stockfish_path):
             raise ValueError('No stockfish executable found at "{}"'.format(stockfish_path))
         
-        self.stockfish = Stockfish(path=stockfish_path)
-        self.stockfish.set_depth(12)  # Adjust depth
+        # initialize the stockfish engine
+        self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
     # Initialise the start of the game
     def handle_game_start(self, color, board, opponent_name):
@@ -50,10 +50,11 @@ class RandomSensing(Player):
     def handle_opponent_move_result(self, captured_my_piece, capture_square):
         if captured_my_piece:
             self.my_piece_captured_square = capture_square
+            self.board.remove_piece_at(capture_square)
             print(f"Opponent captured my piece on square {chess.square_name(capture_square)}")
         else:
             self.my_piece_captured_square = None
-            print("Opponent did not capture any of my pieces")
+            print("Opponent did not capture any of my pieces")  
 
         # Update the set of possible states based on the opponent's move
         updated_states = set()
@@ -68,11 +69,12 @@ class RandomSensing(Player):
                     board.push(move)
                     updated_states.add(board.fen())
                     board.pop()
+
         self.possible_states = updated_states
 
     # implement the logic for selecting a sensing move.
     def choose_sense(self, sense_actions, move_actions, seconds_left):
-         # Filter out squares on the edges of the board
+        # Filter out squares on the edges of the board
         valid_squares = [square for square in chess.SQUARES if 1 <= chess.square_rank(square) <= 6 and 1 <= chess.square_file(square) <= 6]
         chosen_square = random.choice(valid_squares)
         return chosen_square# Randomly select a square from the valid squares
@@ -80,6 +82,13 @@ class RandomSensing(Player):
     # Update State of the squares within the sensing window.
     def handle_sense_result(self, sense_result):
         # Print the sensing result for debugging or logging purposes
+
+        # His code
+        # # add changes to board, if any
+        # for square, piece in sense_result:
+        #     self.board.set_piece_at(square, piece)
+
+
         print(f"Sensing result: {sense_result}")
 
         # Update the set of possible states based on the sensing result

@@ -31,7 +31,7 @@ class RandomSensing(Player):
             raise ValueError('No stockfish executable found at "{}"'.format(stockfish_path))
         
         self.stockfish = Stockfish(path=stockfish_path)
-        self.stockfish.set_depth(2)  # Adjust depth
+        self.stockfish.set_depth(1)  # Adjust depth
 
         # initialize the stockfish engine
         self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
