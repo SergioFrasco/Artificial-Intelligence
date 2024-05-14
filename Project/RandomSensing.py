@@ -14,6 +14,7 @@ class RandomSensingAgent(Player):
         self.color = None
         self.opponent_color = None
         self.took_king = False
+        self.failed_move = []
         
         self.my_piece_captured_square = None
         self.move_number = 0
@@ -96,47 +97,87 @@ class RandomSensingAgent(Player):
         for square, piece in sense_result:
             self.board.set_piece_at(square, piece)
 
-    def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
+    def generate_move(self, board, move_actions, time_limit):
+        
         enemy_king_square = self.board.king(self.opponent_color)
         # print("Enemy king square is", enemy_king_square)
         if enemy_king_square != None:
             # if there are any ally pieces that can take king, execute one of those moves
             enemy_king_attackers = self.board.attackers(self.color, enemy_king_square)
             if enemy_king_attackers:
-                print("Attacking enemy king")
+                # print("Attacking enemy king")
                 attacker_square = enemy_king_attackers.pop()
                 #self.board.push(chess.Move(attacker_square, enemy_king_square))
 
                 finishing_blow = chess.Move(attacker_square, enemy_king_square)
                 if (finishing_blow in move_actions):
                     return finishing_blow
-                
+        
+        # Check if our piece can capture the opposing king
+        # for move in board.legal_moves:
+        #     if board.is_capture(move):
+        #         board.push(move)
+        #         if board.is_checkmate():
+        #             return move.uci()
+        #         board.pop()
+        
+        # If no direct capture, ask Stockfish for a move
         try:
-            self.board.turn = self.color
             # self.board.clear_stack()
-            print(self.board) 
-            if(self.board.is_valid()):
-                result = self.engine.play(self.board, chess.engine.Limit(depth=DEPTH, time=TIME_LIMIT))
-                print(result.move)
+            # print(board) 
+            if(board.is_valid()):
+                result = self.engine.play(board, chess.engine.Limit(depth=DEPTH, time=time_limit))
+                # print(result.move)
                 # print(move_actions)
 
                 if result.move in move_actions:
-                    print("PICKED STOCKFISH BEST MOVE")
+                    # print("PICKED STOCKFISH BEST MOVE")
                     return result.move
                 
             def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
 
             next_moves = list()
             # Generate pseudo-legal moves for the current side to move
-            for move in self.board.pseudo_legal_moves:
+            for move in board.pseudo_legal_moves:
                 # Check if the moved piece belongs to the current side
-                if self.board.piece_at(move.from_square).color == self.color:
+                if board.piece_at(move.from_square).color == self.color:
                     next_moves.append(move)
             
-            return random.choice(intersection(move_actions, next_moves) + [None])
+            return random.choice(move_actions)
                 
         except (chess.engine.EngineError, chess.engine.EngineTerminatedError) as e:
-            print('Engine bad state at "{}"'.format(self.board.fen()))   
+            print('Engine bad state at "{}"'.format(self.board.fen()))
+        
+        return None
+
+    def most_common_move(self, moves):
+        move_counts = {}
+        for move in moves:
+            if move in move_counts:
+                move_counts[move] += 1
+            else:
+                move_counts[move] = 1
+        
+        max_count = max(move_counts.values())
+        most_common_moves = [move for move, count in move_counts.items() if count == max_count]
+        return most_common_moves[0]
+
+    def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
+
+        self.board.turn = self.color
+
+        time_limit = 10 / len(self.possible_states)
+    
+        # generated_move = self.generate_move(self.board, move_actions, TIME_LIMIT)
+
+        # Generate moves for each board
+        generated_moves = [self.generate_move(chess.Board(state), move_actions, time_limit) for state in self.possible_states]
+
+        most_common = self.most_common_move(generated_moves)
+
+        print(self.board)
+
+        return most_common
 
         def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
 
