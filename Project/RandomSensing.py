@@ -3,8 +3,8 @@ from reconchess import *
 import os
 import chess.engine
 
-DEPTH = 3
-TIME_LIMIT = 1
+DEPTH = 1
+TIME_LIMIT = 0.5
 
 STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
 
@@ -13,6 +13,7 @@ class RandomSensingAgent(Player):
         self.board = None
         self.color = None
         self.opponent_color = None
+        self.took_king = False
         
         self.my_piece_captured_square = None
         self.move_number = 0
@@ -63,7 +64,7 @@ class RandomSensingAgent(Player):
 
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
         enemy_king_square = self.board.king(self.opponent_color)
-        print("Enemy king square is", enemy_king_square)
+        # print("Enemy king square is", enemy_king_square)
         if enemy_king_square != None:
             # if there are any ally pieces that can take king, execute one of those moves
             enemy_king_attackers = self.board.attackers(self.color, enemy_king_square)
@@ -71,61 +72,37 @@ class RandomSensingAgent(Player):
                 print("Attacking enemy king")
                 attacker_square = enemy_king_attackers.pop()
                 #self.board.push(chess.Move(attacker_square, enemy_king_square))
-                return chess.Move(attacker_square, enemy_king_square)
 
-        if self.color == chess.WHITE:
-            try:
-                self.board.turn = self.color
-                #self.board.clear_stack()
-                print(self.board) 
-                if(self.board.is_valid()):
-                    result = self.engine.play(self.board, chess.engine.Limit(depth=DEPTH, time=TIME_LIMIT))
-                    print(result.move)
+                finishing_blow = chess.Move(attacker_square, enemy_king_square)
+                if (finishing_blow in move_actions):
+                    return finishing_blow
 
-                    if result.move in move_actions:
-                        print("PICKED STOCKFISH BEST MOVE")
-                        return result.move
-                    
-                def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
+        try:
+            self.board.turn = self.color
+            # self.board.clear_stack()
+            print(self.board) 
+            if(self.board.is_valid()):
+                result = self.engine.play(self.board, chess.engine.Limit(depth=DEPTH, time=TIME_LIMIT))
+                print(result.move)
+                # print(move_actions)
 
-                next_moves = list()
-                # Generate pseudo-legal moves for the current side to move
-                for move in self.board.pseudo_legal_moves:
-                    # Check if the moved piece belongs to the current side
-                    if self.board.piece_at(move.from_square).color == self.color:
-                        next_moves.append(move)
+                if result.move in move_actions:
+                    print("PICKED STOCKFISH BEST MOVE")
+                    return result.move
                 
-                return random.choice(intersection(move_actions, next_moves) + [None])
-                    
-            except (chess.engine.EngineError, chess.engine.EngineTerminatedError) as e:
-                print('Engine bad state at "{}"'.format(self.board.fen()))   
-        else:
-            self.move_number += 1
-            print(self.board)
-            try:
-                print("Board valid - ", self.board.is_valid())
-                if(self.board.is_valid()):
-                    result = self.engine.play(self.board, chess.engine.Limit(depth=DEPTH, time=TIME_LIMIT))
-                    print(result)
-                    if result.move in move_actions:
-                        print("PICKED STOCKFISH BEST MOVE")
-                        return result.move 
+            def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
 
-                def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
-
-                next_moves = list()
-                # Generate pseudo-legal moves for the current side to move
-                for move in self.board.pseudo_legal_moves:
-                    # Check if the moved piece belongs to the current side
-                    if self.board.piece_at(move.from_square).color == self.color:
-                        next_moves.append(move)                       
+            next_moves = list()
+            # Generate pseudo-legal moves for the current side to move
+            for move in self.board.pseudo_legal_moves:
+                # Check if the moved piece belongs to the current side
+                if self.board.piece_at(move.from_square).color == self.color:
+                    next_moves.append(move)
+            
+            return random.choice(intersection(move_actions, next_moves) + [None])
                 
-                move = random.choice(intersection(move_actions, next_moves) + [None])
-                print(move)
-                    
-                return move
-            except (chess.engine.EngineError, chess.engine.EngineTerminatedError) as e:
-                print('Engine bad state at "{}"'.format(self.board.fen()))
+        except (chess.engine.EngineError, chess.engine.EngineTerminatedError) as e:
+            print('Engine bad state at "{}"'.format(self.board.fen()))   
 
         def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
 
@@ -138,26 +115,26 @@ class RandomSensingAgent(Player):
 
         return random.choice(intersection(move_actions, next_moves) + [None])
 
-    def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move],
-                       captured_opponent_piece: bool, capture_square: Optional[Square]):
+    def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move], captured_opponent_piece: bool, capture_square: Optional[Square]):
         
         if taken_move is not None:
             # print("In handle move result")
-            self.board.push(chess.Move.null())
+            # self.board.push(chess.Move.null())
             if taken_move in self.board.pseudo_legal_moves:
                 self.board.push(taken_move)
             else:
                 print(f"Attempted to push an illegal move: {taken_move}")
         else:
-            if requested_move is not None:
-                self.board.push(chess.Move.null())
-                if requested_move in self.board.pseudo_legal_moves:
-                    self.board.push(requested_move)
-                else:
-                    print(f"Attempted to push an illegal move: {requested_move}")
+            # if requested_move is not None:
+            #     # self.board.push(chess.Move.null())
+            #     if requested_move in self.board.pseudo_legal_moves:
+            #         self.board.push(requested_move)
+            #     else:
+            #         print(f"Attempted to push an illegal move: {requested_move}")
 
-    def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason],
-                        game_history: GameHistory):
+            print(f"Failed to take using move: {requested_move}")
+
+    def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason], game_history: GameHistory):
         
         print("We are WHITE") if self.color == chess.WHITE else print("We are BLACK") 
 
