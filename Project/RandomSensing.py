@@ -104,6 +104,11 @@ class RandomSensing(Player):
         if len(self.possible_states) > 10000:
             self.possible_states = random.sample(self.possible_states, 10000)
 
+
+        if len(self.possible_states) == 0:
+            print("+++++ PICKING RANDOM MOVE LOL +++++")
+            return random.choice(move_actions)
+        
         time_limit = 10 / len(self.possible_states) # Set the time limit based on the number of possible states
         move_counts = {}  # Initialize a dictionary to store the move counts
 
@@ -115,7 +120,7 @@ class RandomSensing(Player):
             self.stockfish.set_fen_position(state)
 
             # Get the best move from Stockfish with the time limit
-            best_move = self.stockfish.get_best_move_time(time_limit * 1000)
+            best_move = self.stockfish.get_best_move_time(time_limit * 500)
 
             # Increment the count for the best move
             if best_move in move_counts:
@@ -124,19 +129,40 @@ class RandomSensing(Player):
                 move_counts[best_move] = 1
 
         # Find the move with the highest count
-        majority_move = max(move_counts, key=move_counts.get)
+        majority_move_str = max(move_counts, key=move_counts.get)
+
+        # Convert the majority move string to a chess.Move object
+        majority_move = chess.Move.from_uci(majority_move_str)
 
         # Verify move validity
-        board = chess.Board(self.possible_states[0])  # Get the board position from the first possible state
-        if majority_move in board.legal_moves:
+        board = chess.Board(list(self.possible_states)[0])  # Get the board position from the first possible state
+         # Check if the majority move is a legal move
+        if majority_move in move_actions:
             # Print the chosen move
             print(f"Chosen move: {majority_move}")
             return majority_move
         else:
-            # Handle invalid move (e.g., select another move)
-            print("Chosen move is not valid. Selecting another move.")
-            # Example: return the first legal move as a fallback
-            return next(iter(board.legal_moves), None)
+            # If the majority move is not legal, choose a random legal move
+            legal_moves = list(move_actions)
+            if legal_moves:
+                random_move = random.choice(legal_moves)
+                print(f"Chosen move (random): {random_move}")
+                return random_move
+            else:
+                # If there are no legal moves, return None
+                print("No legal moves available.")
+                return None
+        
+        
+        # if majority_move in board.legal_moves:
+        #     # Print the chosen move
+        #     print(f"Chosen move: {majority_move}")
+        #     return majority_move
+        # else:
+        #     # Handle invalid move (e.g., select another move)
+        #     print("Chosen move is not valid. Selecting another move.")
+        #     # Example: return the first legal move as a fallback
+        #     return next(iter(board.legal_moves), None)
 
 
     # Update the board based on the result of our move
@@ -146,6 +172,11 @@ class RandomSensing(Player):
         print(f"Taken move: {taken_move}")
         print(f"Captured opponent piece: {captured_opponent_piece}")
         print(f"Capture square: {capture_square}")
+
+        if taken_move is None:
+            # The requested move was invalid, and the turn is forfeited
+            print("Invalid move. Turn forfeited.")
+            return
 
         # Update the set of possible states based on the move result
         updated_states = set()
