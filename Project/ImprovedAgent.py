@@ -20,6 +20,7 @@ class ImprovedAgent(Player):
         
         self.my_piece_captured_square = None
         self.move_number = 0
+
         
         # check if stockfish environment variable exists
         if STOCKFISH_ENV_VAR not in os.environ:
@@ -33,13 +34,32 @@ class ImprovedAgent(Player):
             raise ValueError('No stockfish executable found at "{}"'.format(stockfish_path))
 
         # initialize the stockfish engine
-        self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path, setpgrp=True, timeout=40)
+        self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path, timeout=50)
         
     def handle_game_start(self, color: bool, board: chess.Board, opponent_name: str = None):
         self.board = board
         self.color = color
         self.possible_states = set()
         self.possible_states.add(self.board.fen())  # Add the initial board state to the set of possible states
+        self.scholars_valid = True
+
+        # self.white_move = [chess.Move.from_uci("b1c3")]
+        # self.white_move.append(chess.Move.from_uci("c3b5"))
+        # self.white_move.append(chess.Move.from_uci("b5d6"))
+        # self.white_move.append(chess.Move.from_uci("d6e8"))
+        
+        # self.black_move = [chess.Move.from_uci("b8c6")]
+        # self.black_move.append(chess.Move.from_uci("c6b4"))
+        # self.black_move.append(chess.Move.from_uci("b4d3"))
+        # self.black_move.append(chess.Move.from_uci("d3e1"))
+
+        self.black_move1 = [chess.Move.from_uci("b8c6")]
+        self.black_move1.append(chess.Move.from_uci("c6b4"))
+        self.black_move1.append(chess.Move.from_uci("b4d3"))
+        self.black_move1.append(chess.Move.from_uci("d3e1"))
+
+        self.black_move2 = [chess.Move.from_uci("c7c5")]
+        self.black_move2.append(chess.Move.from_uci("d8a5"))
         
         if self.color == chess.WHITE:
             print("We are WHITE")
@@ -67,7 +87,7 @@ class ImprovedAgent(Player):
 
         # Update the set of possible states based on the opponent's move
         updated_states = set()
-        updated_states.add(self.board.fen())
+        if self.board.is_valid(): updated_states.add(self.board.fen())
 
         for state in self.possible_states:
             board = chess.Board(state)
@@ -87,71 +107,45 @@ class ImprovedAgent(Player):
         print("Number of possible boards: ", len(self.possible_states))
 
     def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> Square:
+
+
         # if our piece was just captured, sense where it was captured
         if self.my_piece_captured_square:
             return self.my_piece_captured_square
 
         # otherwise, just randomly choose a sense action, but don't sense on a square where our pieces are located
-        for square, piece in self.board.piece_map().items():
-            if piece.color == self.color:
-                sense_actions.remove(square)
+        # for square, piece in self.board.piece_map().items():
+        #     if piece.color == self.color:
+        #         sense_actions.remove(square)
         
         # Don't sense on a square along the edge
         edges = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 23, 24, 31, 32, 39, 40, 47, 48, 55, 56, 57, 58, 59, 60, 61, 62, 63])
         sense_actions = np.setdiff1d(sense_actions, edges)
         sense_actions = sense_actions.tolist()
 
-        num_pieces = len(self.board.piece_map())
-        if num_pieces > 32:
-            game_phase = "opening"
-        elif num_pieces > 16:
-            game_phase = "middlegame"
-        else:
-            game_phase = "endgame"
+        # otherwise, calculate the entropy for each sense action and choose the one with the highest entropy
+        entropy_scores = {}
+        for square in sense_actions:
+            piece_counts = {}
+            for state in self.possible_states:
+                board = chess.Board(state)
+                piece = board.piece_at(square)
+                if piece is None:
+                    piece_type = '?'
+                else:
+                    piece_type = piece.symbol()
+                piece_counts[piece_type] = piece_counts.get(piece_type, 0) + 1
 
-        # prioritize sensing based on the game phase
-        if game_phase == "opening":
-            # focus on sensing central squares and key positions
-            central_squares = [
-                chess.D4, chess.E4, chess.D5, chess.E5,
-                chess.C4, chess.F4, chess.C5, chess.F5,
-                chess.C3, chess.D3, chess.E3, chess.F3,
-                chess.C6, chess.D6, chess.E6, chess.F6
-            ]
-            for square in central_squares:
-                if square in sense_actions:
-                    return square
+            total_states = len(self.possible_states)
+            entropy = 0
+            for count in piece_counts.values():
+                probability = count / total_states
+                entropy -= probability * math.log2(probability)
 
-        elif game_phase == "middlegame":
-            # focus on sensing squares critical for control, defense, and attack
-            important_squares = []
-            for square in sense_actions:
-                if self.board.is_attacked_by(not self.color, square):
-                    important_squares.append(square)
-                elif self.board.attackers(self.color, square):
-                    important_squares.append(square)
-            if important_squares:
-                return random.choice(important_squares)
+            entropy_scores[square] = entropy
 
-        else:  # endgame
-            # prioritize sensing squares crucial for the endgame position
-            enemy_king_square = self.board.king(not self.color)
-            if enemy_king_square:
-                return enemy_king_square
-
-            pawn_squares = []
-            for square in sense_actions:
-                piece = self.board.piece_at(square)
-                if piece and piece.piece_type == chess.PAWN:
-                    pawn_squares.append(square)
-            if pawn_squares:
-                return random.choice(pawn_squares)
-        
-        # if we might capture a piece when we move, sense where the capture will occur
-        # future_move = self.choose_move(move_actions, seconds_left)
-        # print("\nWE WANT TO MOVE TO ^^^^")
-        # if future_move is not None and self.board.piece_at(future_move.to_square) is not None:
-        #     return future_move.to_square
+        max_entropy_square = max(entropy_scores, key=entropy_scores.get)
+        return max_entropy_square
 
         return random.choice(sense_actions)
         
@@ -195,14 +189,6 @@ class ImprovedAgent(Player):
                 if (finishing_blow in move_actions):
                     return finishing_blow
         
-        # Check if our piece can capture the opposing king
-        # for move in board.legal_moves:
-        #     if board.is_capture(move):
-        #         board.push(move)
-        #         if board.is_checkmate():
-        #             return move.uci()
-        #         board.pop()
-        
         # If no direct capture, ask Stockfish for a move
         try:
             # self.board.clear_stack()
@@ -236,6 +222,7 @@ class ImprovedAgent(Player):
         return most_common_moves[0]
 
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
+
         # Limit the number of possible states to 10000
         if len(self.possible_states) > 10000:
             self.possible_states = random.sample(self.possible_states, 10000)
@@ -243,6 +230,54 @@ class ImprovedAgent(Player):
         self.board.turn = self.color
 
         time_limit = 10 / len(self.possible_states)
+
+        if self.color == chess.WHITE:
+            enemy_king_square = self.board.king(self.opponent_color)
+            # print("Enemy king square is", enemy_king_square)
+            if enemy_king_square != None:
+                # if there are any ally pieces that can take king, execute one of those moves
+                enemy_king_attackers = self.board.attackers(self.color, enemy_king_square)
+                if enemy_king_attackers:
+                    # print("Attacking enemy king")
+                    attacker_square = enemy_king_attackers.pop()
+                    #self.board.push(chess.Move(attacker_square, enemy_king_square))
+                    return chess.Move(attacker_square, enemy_king_square)
+                
+            if self.move_number < len(self.white_move):
+                # print(self.move_number)
+                self.move_number += 1
+                # print(self.white_move[self.move_number - 1])
+                #self.board.push(self.white_move[self.move_number - 1])
+                if(self.white_move[self.move_number-1] in move_actions):
+                    return self.white_move[self.move_number - 1]
+                else:
+                    self.move_number = 10
+        else:
+            enemy_king_square = self.board.king(self.opponent_color)
+            # print("Enemy king square is", enemy_king_square)
+            if enemy_king_square != None:
+                # if there are any ally pieces that can take king, execute one of those moves
+                enemy_king_attackers = self.board.attackers(self.color, enemy_king_square)
+                if enemy_king_attackers:
+                    # print("Attacking enemy king")
+                    attacker_square = enemy_king_attackers.pop()
+                    #self.board.push(chess.Move(attacker_square, enemy_king_square))
+                    return chess.Move(attacker_square, enemy_king_square)
+
+            if self.move_number < len(self.black_move):
+                # print(self.board)
+                #print(self.move_number)
+                self.move_number += 1
+                
+                #self.board.push(self.black_move[self.move_number - 1])
+                if(self.black_move[self.move_number-1] in move_actions):
+                    print(f"EXECUTING ATTACK MOVE: {self.black_move[self.move_number-1]}")
+                    print(self.board)
+                    return self.black_move[self.move_number - 1]
+                else:
+                    self.move_number = 10
+
+        self.move_number += 1
     
         # generated_move = self.generate_move(self.board, move_actions, TIME_LIMIT)
 
@@ -257,6 +292,10 @@ class ImprovedAgent(Player):
 
     def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move], captured_opponent_piece: bool, capture_square: Optional[Square]):
         
+        # if self.move_number < len(self.white_move):
+        #     if taken_move is None and requested_move is not None:
+        #         self.move_number = 10
+
         if taken_move is not None:
             # print("In handle move result")
             # self.board.push(chess.Move.null())

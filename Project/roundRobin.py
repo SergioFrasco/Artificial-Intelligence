@@ -30,7 +30,7 @@ else:
     game_length = float(input("Seconds per game: "))
 
 # players = [RandomSensingAgent, AttackerBot, RandomBot, TroutBot]
-players = [RandomSensingAgent, AttackerBot, RandomBot, TroutBot]
+players = [RandomSensingAgent, ImprovedAgent, RandomBot, TroutBot]
 
 game_rotations = [
     [(0, 1), (2, 3)],
