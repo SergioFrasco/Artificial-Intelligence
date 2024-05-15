@@ -1,0 +1,3 @@
+rc-bot-match reconchess.bots.trout_bot ImprovedAgent.py
+rc-bot-match reconchess.bots.random_bot ImprovedAgent.py
+rc-bot-match RandomSensing.py ImprovedAgent.py

@@ -9,7 +9,7 @@ TIME_LIMIT = 0.5
 
 STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
 
-class RandomSensingAgent(Player):
+class ImprovedAgent(Player):
     def __init__(self):
         self.board = None
         self.color = None
@@ -18,7 +18,7 @@ class RandomSensingAgent(Player):
         self.failed_move = []
         
         self.my_piece_captured_square = None
-        self.move_number = 0
+        self.turn_number = 0
         
         # check if stockfish environment variable exists
         if STOCKFISH_ENV_VAR not in os.environ:
@@ -32,7 +32,7 @@ class RandomSensingAgent(Player):
             raise ValueError('No stockfish executable found at "{}"'.format(stockfish_path))
 
         # initialize the stockfish engine
-        self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path, setpgrp=True, timeout=30)
+        self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path, timeout=30)
         
     def handle_game_start(self, color: bool, board: chess.Board, opponent_name: str = None):
         self.board = board
@@ -48,6 +48,7 @@ class RandomSensingAgent(Player):
             self.opponent_color = chess.WHITE
         
     def handle_opponent_move_result(self, captured_my_piece: bool, capture_square: Optional[Square]):
+
         # if the opponent captured our piece, remove it from our board.
         self.my_piece_captured_square = capture_square
         if captured_my_piece:
@@ -86,25 +87,42 @@ class RandomSensingAgent(Player):
         print("Number of possible boards: ", len(self.possible_states))
 
     def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> Square:
-        # don't sense on a square along the edge
+        chosen_sense = ""
+
+        for square, piece in self.board.piece_map().items():
+            if piece.color == self.color:
+                sense_actions.remove(square)
+
+        # Don't sense the edges of the board since this wastes possible info
         edges = np.array([0, 1, 2, 3, 4, 5, 6, 7,
                           8, 15, 16, 23, 24, 31, 32,
                           39, 40, 47, 48, 55, 56, 57,
-                          58, 59, 60, 61, 62, 63])
+                          58, 59, 60, 61, 62, 63])             
         sense_actions = np.setdiff1d(sense_actions, edges)
         sense_actions = sense_actions.tolist()
-        
-        # otherwise, random sense action
-        # for square, piece in self.board.piece_map().items():
-        #     if piece.color == self.color:
-        #         sense_actions.remove(square)
 
-        return random.choice(sense_actions)
+        # Make sure that the sense is on their half of the board in the first 2 rounds of the gamae
+        if self.turn_number == 0:
+            if self.color == chess.WHITE:
+                sense_actions = np.setdiff1d(sense_actions, [9, 10, 11, 12, 13, 14])
+            else:
+                sense_actions = np.setdiff1d(sense_actions, [49, 50, 51, 52, 53, 54])
+        
+        # if our piece was just captured, sense where it was captured
+        if self.my_piece_captured_square:
+            chosen_sense = self.my_piece_captured_square
+            print(f"Captured sense action: {chess.SQUARE_NAMES[chosen_sense]}")
+            return chosen_sense
+
+        chosen_sense = random.choice(sense_actions)
+        print(f"Chosen random sense action: {chess.SQUARE_NAMES[chosen_sense]}")
+        return chosen_sense
 
     def handle_sense_result(self, sense_result: List[Tuple[Square, Optional[chess.Piece]]]):
         # add changes to board, if any
         for square, piece in sense_result:
             self.board.set_piece_at(square, piece)
+
 
     def generate_move(self, board, move_actions, time_limit):
         
@@ -172,6 +190,7 @@ class RandomSensingAgent(Player):
         return most_common_moves[0]
 
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
+        self.turn_number += 1
 
         self.board.turn = self.color
 
@@ -188,16 +207,16 @@ class RandomSensingAgent(Player):
 
         return most_common
 
-        def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
+        # def intersection(lst1, lst2): return [value for value in lst1 if value in lst2]
 
-        next_moves = list()
-        # Generate pseudo-legal moves for the current side to move
-        for move in self.board.pseudo_legal_moves:
-            # Check if the moved piece belongs to the current side
-            if self.board.piece_at(move.from_square).color == self.color:
-                next_moves.append(move) 
+        # next_moves = list()
+        # # Generate pseudo-legal moves for the current side to move
+        # for move in self.board.pseudo_legal_moves:
+        #     # Check if the moved piece belongs to the current side
+        #     if self.board.piece_at(move.from_square).color == self.color:
+        #         next_moves.append(move) 
 
-        return random.choice(intersection(move_actions, next_moves) + [None])
+        # return random.choice(intersection(move_actions, next_moves) + [None])
 
     def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move], captured_opponent_piece: bool, capture_square: Optional[Square]):
         
@@ -206,6 +225,7 @@ class RandomSensingAgent(Player):
             # self.board.push(chess.Move.null())
             if taken_move in self.board.pseudo_legal_moves:
                 self.board.push(taken_move)
+                
             else:
                 print(f"Attempted to push an illegal move: {taken_move}")
         else:
