@@ -53,13 +53,11 @@ class ImprovedAgent(Player):
         # self.black_move.append(chess.Move.from_uci("b4d3"))
         # self.black_move.append(chess.Move.from_uci("d3e1"))
 
-        self.black_move1 = [chess.Move.from_uci("b8c6")]
-        self.black_move1.append(chess.Move.from_uci("c6b4"))
-        self.black_move1.append(chess.Move.from_uci("b4d3"))
-        self.black_move1.append(chess.Move.from_uci("d3e1"))
+        self.black_move_right = [chess.Move.from_uci("e7e5")]
+        self.black_move_right.append(chess.Move.from_uci("d8h4"))
 
-        self.black_move2 = [chess.Move.from_uci("c7c5")]
-        self.black_move2.append(chess.Move.from_uci("d8a5"))
+        self.black_move_left = [chess.Move.from_uci("c7c5")]
+        self.black_move_left.append(chess.Move.from_uci("d8a5"))
         
         if self.color == chess.WHITE:
             print("We are WHITE")
@@ -107,7 +105,13 @@ class ImprovedAgent(Player):
         print("Number of possible boards: ", len(self.possible_states))
 
     def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> Square:
-
+        if self.color == chess.WHITE:
+            pass
+        else:
+            if self.move_number == 0:
+                return chess.parse_square("e3")
+            elif self.move_number == 1 and self.scholars_valid == True:
+                pass
 
         # if our piece was just captured, sense where it was captured
         if self.my_piece_captured_square:
@@ -231,6 +235,8 @@ class ImprovedAgent(Player):
 
         time_limit = 10 / len(self.possible_states)
 
+        self.move_number += 1
+
         if self.color == chess.WHITE:
             enemy_king_square = self.board.king(self.opponent_color)
             # print("Enemy king square is", enemy_king_square)
@@ -264,20 +270,22 @@ class ImprovedAgent(Player):
                     #self.board.push(chess.Move(attacker_square, enemy_king_square))
                     return chess.Move(attacker_square, enemy_king_square)
 
-            if self.move_number < len(self.black_move):
-                # print(self.board)
-                #print(self.move_number)
-                self.move_number += 1
-                
-                #self.board.push(self.black_move[self.move_number - 1])
-                if(self.black_move[self.move_number-1] in move_actions):
-                    print(f"EXECUTING ATTACK MOVE: {self.black_move[self.move_number-1]}")
-                    print(self.board)
-                    return self.black_move[self.move_number - 1]
+            if self.move_number-1 == 0:
+                if self.color == chess.WHITE:
+                    pass
                 else:
-                    self.move_number = 10
-
-        self.move_number += 1
+                    if self.board.piece_at("d2") == None:
+                        #EXECUTE LEFT SIDE ATTACK
+                        if self.black_move_left[self.move_number-1] in move_actions:
+                            return self.black_move_left[self.move_number-1]
+                        pass
+                    elif self.board.piece_at("f2") == None:
+                        #EXECUTE RIGHT SIDE ATTACK
+                        if self.black_move_right[self.move_number-1] in move_actions:
+                            return self.black_move_right[self.move_number-1]
+                        pass
+                    else:
+                        self.scholars_valid = False
     
         # generated_move = self.generate_move(self.board, move_actions, TIME_LIMIT)
 
