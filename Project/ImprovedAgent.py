@@ -1,31 +1,33 @@
+import chess.engine
 import random
 from reconchess import *
 import os
-import chess.engine
-import numpy as np
+from collections import Counter
 import math
-
-DEPTH = 1
-TIME_LIMIT = 0.5
+from typing import List, Tuple, Optional
+import chess
+import numpy as np
 
 STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
 
-class ImprovedAgent(Player):
-    def __init__(self):
-        self.board = None
-        self.color = None
-        self.opponent_color = None
-        self.took_king = False
-        self.failed_move = []
-        
-        self.my_piece_captured_square = None
-        self.move_number = 0
+STATE_LIMIT = 100000
 
-        
-        # check if stockfish environment variable exists
+class ImprovedAgent(Player):
+    """
+    TroutBot uses the Stockfish chess engine to choose moves. In order to run TroutBot you'll need to download
+    Stockfish from https://stockfishchess.org/download/ and create an environment variable called STOCKFISH_EXECUTABLE
+    that is the path to the downloaded Stockfish executable.
+    """
+
+    def __init__(self):
+        self.board_states = set()
+        self.color = None
+        self.my_piece_captured_square = None
+
+        # make sure stockfish environment variable exists
         if STOCKFISH_ENV_VAR not in os.environ:
             raise KeyError(
-                'Require an environment variable called "{}" pointing to the Stockfish executable'.format(
+                'TroutBot requires an environment variable called "{}" pointing to the Stockfish executable'.format(
                     STOCKFISH_ENV_VAR))
 
         # make sure there is actually a file
@@ -34,313 +36,299 @@ class ImprovedAgent(Player):
             raise ValueError('No stockfish executable found at "{}"'.format(stockfish_path))
 
         # initialize the stockfish engine
-        self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path, timeout=50)
-        
-    def handle_game_start(self, color: bool, board: chess.Board, opponent_name: str = None):
-        self.board = board
+        self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path, timeout=100)
+
+    def handle_game_start(self, color: Color, board: chess.Board, opponent_name: str):
         self.color = color
-        self.possible_states = set()
-        self.possible_states.add(self.board.fen())  # Add the initial board state to the set of possible states
-        self.scholars_valid = True
-
-        # self.white_move = [chess.Move.from_uci("b1c3")]
-        # self.white_move.append(chess.Move.from_uci("c3b5"))
-        # self.white_move.append(chess.Move.from_uci("b5d6"))
-        # self.white_move.append(chess.Move.from_uci("d6e8"))
+        self.board_states.add(board.fen())
         
-        # self.black_move = [chess.Move.from_uci("b8c6")]
-        # self.black_move.append(chess.Move.from_uci("c6b4"))
-        # self.black_move.append(chess.Move.from_uci("b4d3"))
-        # self.black_move.append(chess.Move.from_uci("d3e1"))
 
-        self.black_move_right = [chess.Move.from_uci("e7e5")]
-        self.black_move_right.append(chess.Move.from_uci("d8h4"))
-
-        self.black_move_left = [chess.Move.from_uci("c7c5")]
-        self.black_move_left.append(chess.Move.from_uci("d8a5"))
-        
-        if self.color == chess.WHITE:
-            print("We are WHITE")
-            self.opponent_color = chess.BLACK
-        else:
-            print("We are BLACK")
-            self.opponent_color = chess.WHITE
-        
     def handle_opponent_move_result(self, captured_my_piece: bool, capture_square: Optional[Square]):
-        # if the opponent captured our piece, remove it from our board.
+        print(f"In handle_opponent_move_result {len(self.board_states)}")
+        
         self.my_piece_captured_square = capture_square
+
+        # if the opponent captured our piece, remove it from all board states
+        new_states = set()
+        # if captured_my_piece:
+        #     for state in self.board_states:
+        #         board = chess.Board(state)
+        #         board.remove_piece_at(capture_square)
+        #         new_states.add(board.fen())
+        #     self.board_states = new_states
+
+        # instead if an opponent captured our piece, we should run through all the boards, make all possible moves where that move was possible and update the boards
         if captured_my_piece:
-            self.board.remove_piece_at(capture_square)
-
-            # Remove all states that assume the captured piece wasn't taken
-            updated_states = set()
-            updated_states.add(self.board.fen())
-
-            for state in self.possible_states:
+            for state in self.board_states:
                 board = chess.Board(state)
-                if board.piece_at(capture_square) is None:
-                    updated_states.add(state)
-
-            self.possible_states = updated_states    
-
-        # Update the set of possible states based on the opponent's move
-        updated_states = set()
-        if self.board.is_valid(): updated_states.add(self.board.fen())
-
-        for state in self.possible_states:
+                
+                # Find all possible moves where the capture was possible
+                for move in board.pseudo_legal_moves:
+                    if move.to_square == capture_square:
+                        board.push(move)
+                        new_states.add(board.fen())
+                        board.pop()
+        else:
+            new_states = self.board_states.copy()
+        
+        generated_states = set()
+        for state in new_states:    #changed this from board states to new states so it takes into account the changes above if there were any
             board = chess.Board(state)
+            # print(board)
+            board.turn = not self.color
             for move in board.pseudo_legal_moves: 
-                if not captured_my_piece and move.to_square != capture_square:
-                    if (len(updated_states) > 50000):
+                    if (len(generated_states) > STATE_LIMIT):
                         break
-
+                    
                     board.push(move)
-                    updated_states.add(board.fen())
+                    generated_states.add(board.fen())
                     board.pop()
             
-            if (len(updated_states) > 50000):
+            if (len(generated_states) > STATE_LIMIT):
                 break
+        
+        self.board_states = generated_states
+        # for state in generated_states:
+        #     # print(chess.Board(state))
+        #     self.board_states.add(state)
 
-        self.possible_states = updated_states
-        print("Number of possible boards: ", len(self.possible_states))
+    def naive_entropy(self, sense_actions: List[Square]):
+        """
+        Implements the Naive Entropy sensing strategy.
+        Calculates the entropy for each square on the board and selects the center square
+        of the 3x3 region with the highest aggregate entropy.
+        """
+        # Cache board objects for each state
+        board_cache = {state: chess.Board(state) for state in self.board_states}
 
-    def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> Square:
-        if self.color == chess.WHITE:
-            pass
-        else:
-            if self.move_number == 0:
-                return chess.parse_square("e3")
-            elif self.move_number == 1 and self.scholars_valid == True:
-                pass
+        # Calculate entropy for each square
+        square_entropies = {}
+        for square in range(64):
+            piece_counts = Counter(board_cache[state].piece_at(square) for state in self.board_states)
+            total = sum(piece_counts.values())
+            entropy = -sum(count/total * math.log2(count/total) if count > 0 else 0 for count in piece_counts.values())
+            square_entropies[square] = entropy
+
+        # Compute aggregate entropy for each 3x3 region
+        region_entropies = {}
+        for center_square in sense_actions:
+            region = [center_square - 9, center_square - 8, center_square - 7,
+                    center_square - 1, center_square, center_square + 1,
+                    center_square + 7, center_square + 8, center_square + 9]
+            region_entropy = sum(square_entropies[square] for square in region)
+            
+            region_entropies[center_square] = region_entropy 
+
+        best_square = max(region_entropies, key=region_entropies.get)
+        
+        return best_square
+
+    def use_stockfish(self, sense_actions: List[Square]):
+        if len(self.board_states) > 0: 
+            if (len(self.board_states) > STATE_LIMIT):
+                self.board_states = random.sample(self.board_states, STATE_LIMIT)
+
+            time_limit = 10 / len(self.board_states) 
+        # else:
+        #     # print("Sensed the centre")
+        #     central_squares = [
+        #         chess.D4, chess.E4, chess.D5, chess.E5,
+        #         chess.C4, chess.F4, chess.C5, chess.F5,
+        #         chess.C3, chess.D3, chess.E3, chess.F3,
+        #         chess.C6, chess.D6, chess.E6, chess.F6
+        #     ]
+        #     for square in central_squares:
+        #         if square in sense_actions:
+        #             return square
+
+        ideal_senses = dict()
+        for state in self.board_states:
+            board = chess.Board(state)
+            board.turn = not self.color
+            board.clear_stack()
+            if board.is_valid():
+                
+                try:
+                    result = self.engine.play(board, chess.engine.Limit(time=time_limit))
+                    
+                    if result.move is not None:
+                        if (result.move.to_square in sense_actions):
+                            if result.move.to_square in ideal_senses.keys():
+                                ideal_senses[result.move.to_square] += 1
+                            else:
+                                ideal_senses[result.move.to_square] = 1
+                except (chess.engine.EngineError, chess.engine.EngineTerminatedError) as e:
+                    # print('Engine bad state at "{}"'.format(board.fen()))
+                    # print(board)
+                    pass
+                # print(result.move.to_square) 
+        # print(len(self.board_states))
+
+        if (len(ideal_senses.values()) == 0):
+            print(f"STOCKFISH DIED, chose random")
+            return random.choice(sense_actions)
+
+        max_count = max(ideal_senses.values())
+        best_senses = [move for move, count in ideal_senses.items() if count == max_count]
+
+        if best_senses:
+            # print(f"Number of moves: {len(best_senses)}")
+            # print(f"Best sense was: {chess.square_name(best_senses[0])}")
+            return best_senses[0]
+        
+        return random.choice(sense_actions)
+
+    def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> \
+            Optional[Square]:
+        print(f"In choose_sense {len(self.board_states)}")
 
         # if our piece was just captured, sense where it was captured
         if self.my_piece_captured_square:
             return self.my_piece_captured_square
 
-        # otherwise, just randomly choose a sense action, but don't sense on a square where our pieces are located
-        # for square, piece in self.board.piece_map().items():
-        #     if piece.color == self.color:
-        #         sense_actions.remove(square)
-        
-        # Don't sense on a square along the edge
+        # if we might capture a piece when we move, sense where the capture will occur
+        # future_move = self.choose_move(move_actions, seconds_left)
+        # if future_move is not None and any(chess.Board(board).piece_at(future_move.to_square) is not None for board in self.board_states):
+        #     return future_move.to_square
+
+        if len(self.board_states) == 1:
+            return self.use_stockfish(sense_actions)
+
         edges = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 23, 24, 31, 32, 39, 40, 47, 48, 55, 56, 57, 58, 59, 60, 61, 62, 63])
         sense_actions = np.setdiff1d(sense_actions, edges)
         sense_actions = sense_actions.tolist()
 
-        # otherwise, calculate the entropy for each sense action and choose the one with the highest entropy
-        entropy_scores = {}
-        for square in sense_actions:
-            piece_counts = {}
-            for state in self.possible_states:
-                board = chess.Board(state)
-                piece = board.piece_at(square)
-                if piece is None:
-                    piece_type = '?'
-                else:
-                    piece_type = piece.symbol()
-                piece_counts[piece_type] = piece_counts.get(piece_type, 0) + 1
+        sense_square_using_naive_entropy = self.naive_entropy(sense_actions)
 
-            total_states = len(self.possible_states)
-            entropy = 0
-            for count in piece_counts.values():
-                probability = count / total_states
-                entropy -= probability * math.log2(probability)
+        return sense_square_using_naive_entropy
 
-            entropy_scores[square] = entropy
-
-        max_entropy_square = max(entropy_scores, key=entropy_scores.get)
-        return max_entropy_square
-
-        return random.choice(sense_actions)
-        
     def handle_sense_result(self, sense_result: List[Tuple[Square, Optional[chess.Piece]]]):
-        # add the pieces in the sense result to our board
-        for square, piece in sense_result:
-            self.board.set_piece_at(square, piece)
+        print(f"In handle_sense_result {len(self.board_states)}")
 
-        # Remove all states that don't match the sense result
-        consistent_states = set()
-        consistent_states.add(self.board.fen())
+        # create a new set of board states based on the sense result
+        new_board_states = set()
 
-        for state in self.possible_states:
-            same = True
+        for state in self.board_states:
             board = chess.Board(state)
-
+            flag = True
             for square, piece in sense_result:
-                board_piece = board.piece_at(square)    
-
-                if board_piece != piece:
-                    same = False
+                # print(board.piece_at(square), piece) 
+                if board.piece_at(square) != piece:
+                    flag = False
                     break
-            
-            if same:
-                consistent_states.add(state)
-        
-        self.possible_states = consistent_states
 
-    def generate_move(self, board, move_actions, time_limit):    
-        enemy_king_square = self.board.king(self.opponent_color)
-        # print("Enemy king square is", enemy_king_square)
-        if enemy_king_square != None:
-            # if there are any ally pieces that can take king, execute one of those moves
-            enemy_king_attackers = self.board.attackers(self.color, enemy_king_square)
-            if enemy_king_attackers:
-                # print("Attacking enemy king")
-                attacker_square = enemy_king_attackers.pop()
-                #self.board.push(chess.Move(attacker_square, enemy_king_square))
+            if flag:
+                # print("BOARD WAS VALIDDDD")
+                # print(board)
+                new_board_states.add(board.fen())
 
-                finishing_blow = chess.Move(attacker_square, enemy_king_square)
-                if (finishing_blow in move_actions):
-                    return finishing_blow
-        
-        # If no direct capture, ask Stockfish for a move
-        try:
-            # self.board.clear_stack()
-            # print(board) 
-            if(board.is_valid()):
-                result = self.engine.play(board, chess.engine.Limit(depth=DEPTH, time=time_limit))
-                # print(result.move)
-                # print(move_actions)
-
-                if result.move in move_actions:
-                    # print("PICKED STOCKFISH BEST MOVE")
-                    return result.move
-            
-            return random.choice(move_actions)
-                
-        except (chess.engine.EngineError, chess.engine.EngineTerminatedError) as e:
-            print('Engine bad state at "{}"'.format(self.board.fen()))
-        
-        return None
-
-    def most_common_move(self, moves):
-        move_counts = {}
-        for move in moves:
-            if move in move_counts:
-                move_counts[move] += 1
-            else:
-                move_counts[move] = 1
-        
-        max_count = max(move_counts.values())
-        most_common_moves = [move for move, count in move_counts.items() if count == max_count]
-        return most_common_moves[0]
+        self.board_states = new_board_states
 
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
+        print(f"In choose_move {len(self.board_states)}")
 
-        # Limit the number of possible states to 10000
-        if len(self.possible_states) > 10000:
-            self.possible_states = random.sample(self.possible_states, 10000)
+        # Limit the number of possible states
+        if len(self.board_states) > STATE_LIMIT:
+            self.board_states = random.sample(self.board_states, STATE_LIMIT)
 
-        self.board.turn = self.color
-
-        time_limit = 10 / len(self.possible_states)
-
-        self.move_number += 1
-
-        if self.color == chess.WHITE:
-            enemy_king_square = self.board.king(self.opponent_color)
-            # print("Enemy king square is", enemy_king_square)
-            if enemy_king_square != None:
-                # if there are any ally pieces that can take king, execute one of those moves
-                enemy_king_attackers = self.board.attackers(self.color, enemy_king_square)
-                if enemy_king_attackers:
-                    # print("Attacking enemy king")
-                    attacker_square = enemy_king_attackers.pop()
-                    #self.board.push(chess.Move(attacker_square, enemy_king_square))
-                    return chess.Move(attacker_square, enemy_king_square)
-                
-            if self.move_number < len(self.white_move):
-                # print(self.move_number)
-                self.move_number += 1
-                # print(self.white_move[self.move_number - 1])
-                #self.board.push(self.white_move[self.move_number - 1])
-                if(self.white_move[self.move_number-1] in move_actions):
-                    return self.white_move[self.move_number - 1]
-                else:
-                    self.move_number = 10
+        if len(self.board_states) > 0:
+            time_limit = 10 / len(self.board_states)
         else:
-            enemy_king_square = self.board.king(self.opponent_color)
-            # print("Enemy king square is", enemy_king_square)
-            if enemy_king_square != None:
-                # if there are any ally pieces that can take king, execute one of those moves
-                enemy_king_attackers = self.board.attackers(self.color, enemy_king_square)
-                if enemy_king_attackers:
-                    # print("Attacking enemy king")
-                    attacker_square = enemy_king_attackers.pop()
-                    #self.board.push(chess.Move(attacker_square, enemy_king_square))
-                    return chess.Move(attacker_square, enemy_king_square)
-
-            if self.move_number-1 == 0:
-                if self.color == chess.WHITE:
-                    pass
-                else:
-                    if self.board.piece_at("d2") == None:
-                        #EXECUTE LEFT SIDE ATTACK
-                        if self.black_move_left[self.move_number-1] in move_actions:
-                            return self.black_move_left[self.move_number-1]
-                        pass
-                    elif self.board.piece_at("f2") == None:
-                        #EXECUTE RIGHT SIDE ATTACK
-                        if self.black_move_right[self.move_number-1] in move_actions:
-                            return self.black_move_right[self.move_number-1]
-                        pass
-                    else:
-                        self.scholars_valid = False
-    
-        # generated_move = self.generate_move(self.board, move_actions, TIME_LIMIT)
-
-        # Generate moves for each board
-        generated_moves = [self.generate_move(chess.Board(state), move_actions, time_limit) for state in self.possible_states]
-
-        most_common = self.most_common_move(generated_moves)
-
-        print(self.board)
-
-        return most_common
-
-    def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move], captured_opponent_piece: bool, capture_square: Optional[Square]):
+            return random.choice(move_actions)
         
-        # if self.move_number < len(self.white_move):
-        #     if taken_move is None and requested_move is not None:
-        #         self.move_number = 10
+        # Check if the king is under attack
+        for state in self.board_states:
+            board = chess.Board(state)
+            king_square = board.king(self.color)
+            if king_square:
+                attackers = board.attackers(not self.color, king_square)
+                if attackers:
+                    # King is under attack, find the best move to avoid the attack
+                    best_move = None
+                    best_score = -float('inf')
+                    for move in move_actions:
+                        new_board = board.copy()
+                        if move in new_board.pseudo_legal_moves:
+                            new_board.push(move)
+                            if not new_board.is_attacked_by(not self.color, king_square):
+                                try:
+                                    result = self.engine.play(new_board, chess.engine.Limit(time=time_limit))
+                                    score = result.info.get('score', None)
+                                    if score is not None and score.white().score(mate_score=32000) > best_score:
+                                        best_move = move
+                                        best_score = score.white().score(mate_score=32000)
+                                except (chess.engine.EngineTerminatedError, chess.engine.EngineError):
+                                    pass
+                    if best_move != None:
+                        return best_move
 
+        # if we might be able to take the king, try to
+        for state in self.board_states:
+            board = chess.Board(state)
+            enemy_king_square = board.king(not self.color)
+            if enemy_king_square:
+                # if there are any ally pieces that can take king, execute one of those moves
+                enemy_king_attackers = board.attackers(self.color, enemy_king_square)
+                if enemy_king_attackers:
+                    attacker_square = enemy_king_attackers.pop()
+                    if chess.Move(attacker_square, enemy_king_square) in move_actions:
+                        return chess.Move(attacker_square, enemy_king_square)
+
+        # get the most popular move among all board states
+        move_counts = Counter()
+        for state in self.board_states:
+            board = chess.Board(state)
+            board.turn = self.color
+            try:
+                result = self.engine.play(board, chess.engine.Limit(time=time_limit))
+                if (result.move in move_actions):
+                    move_counts[result.move] += 1
+            except (chess.engine.EngineTerminatedError, chess.engine.EngineError):
+                pass
+
+        if move_counts:
+            return max(move_counts, key=move_counts.get)
+
+        # if all else fails, pass
+        return random.choice(move_actions)
+
+    def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move],
+                           captured_opponent_piece: bool, capture_square: Optional[Square]):
+        print(f"In handle_move_result {len(self.board_states)}")
+        
+        new_states = set()
+        # if a move was executed, apply it to all board states
         if taken_move is not None:
-            # print("In handle move result")
-            # self.board.push(chess.Move.null())
-            if taken_move in self.board.pseudo_legal_moves:
-                self.board.push(taken_move)
-
-            changed_states = set()
-            for state in self.possible_states:
+            # if the move we chose worked, update all boards with this move
+            for state in self.board_states:
                 board = chess.Board(state)
 
                 if taken_move in board.pseudo_legal_moves:
-                    changed_states.add(board.fen())
+                    if captured_opponent_piece:
+                        if (board.piece_at(capture_square) == captured_opponent_piece):
+                            board.remove_piece_at(capture_square)
 
-            changed_states.add(self.board.fen())
-            self.possible_states = changed_states
-
-            # else:
-            #     print(f"Attempted to push an illegal move: {taken_move}")
+                    if taken_move in board.pseudo_legal_moves:
+                        board.push(taken_move)
+                        if board.is_valid(): new_states.add(board.fen())
+                else:
+                    # if the taken move wasn't possible, exclude this board
+                    pass
         else:
+            # if we tried to take, but failed because something was in the way
             if requested_move is not None:
-
-                changed_states = set()
-                for state in self.possible_states:
+                # exclude all boards where the move was possible
+                for state in self.board_states:
                     board = chess.Board(state)
-
-                    if requested_move not in board.pseudo_legal_moves:
-                        changed_states.add(board.fen())
-                
-                self.possible_states = changed_states
-
-                # else:
-                #     print(f"Attempted to push an illegal move: {requested_move}")
-
-            print(f"Failed to take using move: {requested_move}")
-
-    def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason], game_history: GameHistory):
+                    if (requested_move not in board.pseudo_legal_moves):
+                        new_states.add(board.fen())
         
-        print("We are WHITE") if self.color == chess.WHITE else print("We are BLACK") 
+        self.board_states = new_states
 
-        self.engine.quit()
+    def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason],
+                        game_history: GameHistory):
+        try:
+            # if the engine is already terminated then this call will throw an exception
+            self.engine.quit()
+        except chess.engine.EngineTerminatedError:
+            pass

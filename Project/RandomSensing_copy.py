@@ -2,8 +2,9 @@ import random
 from reconchess import *
 import os
 import chess.engine
+import math
 
-DEPTH = 3
+DEPTH = 1
 TIME_LIMIT = 0.5
 
 STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
@@ -84,12 +85,29 @@ class RandomSensingAgent(Player):
         print("Number of possible boards: ", len(self.possible_states))
 
     def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> Square:
-        # otherwise, random sense action
-        for square, piece in self.board.piece_map().items():
-            if piece.color == self.color:
-                sense_actions.remove(square)
+        # otherwise, calculate the entropy for each sense action and choose the one with the highest entropy
+        entropy_scores = {}
+        for square in sense_actions:
+            piece_counts = {}
+            for state in self.possible_states:
+                board = chess.Board(state)
+                piece = board.piece_at(square)
+                if piece is None:
+                    piece_type = '?'
+                else:
+                    piece_type = piece.symbol()
+                piece_counts[piece_type] = piece_counts.get(piece_type, 0) + 1
 
-        return random.choice(sense_actions)
+            total_states = len(self.possible_states)
+            entropy = 0
+            for count in piece_counts.values():
+                probability = count / total_states
+                entropy -= probability * math.log2(probability)
+
+            entropy_scores[square] = entropy
+
+        max_entropy_square = max(entropy_scores, key=entropy_scores.get)
+        return max_entropy_square
 
     def handle_sense_result(self, sense_result: List[Tuple[Square, Optional[chess.Piece]]]):
         # add changes to board, if any
@@ -164,15 +182,33 @@ class RandomSensingAgent(Player):
             # self.board.push(chess.Move.null())
             if taken_move in self.board.pseudo_legal_moves:
                 self.board.push(taken_move)
-            else:
-                print(f"Attempted to push an illegal move: {taken_move}")
+
+            changed_states = set()
+            for state in self.possible_states:
+                board = chess.Board(state)
+
+                if taken_move in board.pseudo_legal_moves:
+                    changed_states.add(board.fen())
+
+            changed_states.add(self.board.fen())
+            self.possible_states = changed_states
+
+            # else:
+            #     print(f"Attempted to push an illegal move: {taken_move}")
         else:
-            # if requested_move is not None:
-            #     # self.board.push(chess.Move.null())
-            #     if requested_move in self.board.pseudo_legal_moves:
-            #         self.board.push(requested_move)
-            #     else:
-            #         print(f"Attempted to push an illegal move: {requested_move}")
+            if requested_move is not None:
+
+                changed_states = set()
+                for state in self.possible_states:
+                    board = chess.Board(state)
+
+                    if requested_move not in board.pseudo_legal_moves:
+                        changed_states.add(board.fen())
+                
+                self.possible_states = changed_states
+
+                # else:
+                #     print(f"Attempted to push an illegal move: {requested_move}")
 
             print(f"Failed to take using move: {requested_move}")
 

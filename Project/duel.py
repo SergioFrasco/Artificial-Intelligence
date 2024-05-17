@@ -5,7 +5,7 @@ from reconchess.bots.random_bot import RandomBot
 from reconchess.bots.trout_bot import TroutBot
 from reconchess.bots.attacker_bot import AttackerBot
 from RandomSensing import RandomSensingAgent
-from ImprovedAgentWorking import ImprovedAgent
+from ImprovedAgent import ImprovedAgent
 
 # Define the environment variable for Stockfish
 STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
@@ -52,7 +52,7 @@ def run_match(bot1_path, bot2_path, num_matches):
 
 # Paths to the bots' Python files
 bot1_path = "reconchess.bots.trout_bot"
-bot2_path = "ImprovedAgentWorking.py"
+bot2_path = "better_trout.py"
 
 # Number of matches to run
 num_matches = 20

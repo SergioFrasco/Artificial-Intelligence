@@ -3,7 +3,7 @@ from reconchess.bots.random_bot import RandomBot
 from reconchess.bots.trout_bot import TroutBot
 from reconchess.bots.attacker_bot import AttackerBot
 from RandomSensing import RandomSensingAgent
-from AdaptiveEntropy import ImprovedAgent
+from ImprovedAgent import ImprovedAgent
 
 
 import sys
