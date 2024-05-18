@@ -272,19 +272,14 @@ class ImprovedAgent(Player):
 
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
         print(f"In choose_move {len(self.board_states)}")
-       
 
-        # if self.turn_number == 0:
-        #     return [chess.Move.from_uci("b1c3")]
-        #     # self.white_move.append(chess.Move.from_uci("c3b5"))
-        #     # self.white_move.append(chess.Move.from_uci("b5d6"))
-            # self.white_move.append(chess.Move.from_uci("d6e8"))
 
 
       # If playing as white, execute the predefined rush moves
         if self.color == chess.WHITE and self.move_number < len(self.white_move):
-            print("Attempting to kill king with move: ", self.move_number)
-            return self.white_move[self.move_number]
+            if self.white_move[self.move_number] in move_actions: #make sure the knight is still alive on the final move
+                print("Attempting to kill king with move: ", self.move_number)
+                return self.white_move[self.move_number]
         
 
         # Limit the number of possible states
@@ -358,7 +353,7 @@ class ImprovedAgent(Player):
         print(f"In handle_move_result {len(self.board_states)}")
         
         self.move_number += 1
-        
+
         new_states = set()
         # if a move was executed, apply it to all board states
         if taken_move is not None:
