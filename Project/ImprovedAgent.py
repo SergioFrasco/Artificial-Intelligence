@@ -120,6 +120,19 @@ class ImprovedAgent(Player):
             region_entropies[center_square] = region_entropy 
 
         best_square = max(region_entropies, key=region_entropies.get)
+
+        print(f"----ENTROPY Orginal Best Sense was: {chess.square_name(best_square)}----")
+            # Adjust the sensing square if it is along the borders
+        rank, file = divmod(best_square, 8)
+        if rank == 0:  # Bottom border
+            best_square += 8  # Move one square up
+        elif rank == 7:  # Top border
+            best_square -= 8  # Move one square down
+        elif file == 0:  # Left border
+            best_square += 1  # Move one square right
+        elif file == 7:  # Right border
+            best_square -= 1  # Move one square left
+        print(f"----ENTROPY Best sense after adjustments: {chess.square_name(best_square)}----")   
         
         return best_square
 
@@ -173,8 +186,21 @@ class ImprovedAgent(Player):
 
         if best_senses:
             # print(f"Number of moves: {len(best_senses)}")
-            # print(f"Best sense was: {chess.square_name(best_senses[0])}")
+            print(f"----STOCKFISH Orginal Best Sense was: {chess.square_name(best_senses[0])}----")
+            # Adjust the sensing square if it is along the borders
+            rank, file = divmod(best_senses[0], 8)
+            if rank == 0:  # Bottom border
+                best_senses[0] += 8  # Move one square up
+            elif rank == 7:  # Top border
+                best_senses[0] -= 8  # Move one square down
+            elif file == 0:  # Left border
+                best_senses[0] += 1  # Move one square right
+            elif file == 7:  # Right border
+                best_senses[0] -= 1  # Move one square left
+            print(f"----STOCKFISH Best sense after adjustments: {chess.square_name(best_senses[0])}----")   
+
             return best_senses[0]
+
         
         return random.choice(sense_actions)
 
