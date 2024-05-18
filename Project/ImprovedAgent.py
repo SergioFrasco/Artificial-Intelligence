@@ -23,6 +23,13 @@ class ImprovedAgent(Player):
         self.board_states = set()
         self.color = None
         self.my_piece_captured_square = None
+        self.move_number = 0
+
+        # Only play knight push when we're white
+        self.white_move = [chess.Move.from_uci("b1c3")]
+        self.white_move.append(chess.Move.from_uci("c3b5"))
+        self.white_move.append(chess.Move.from_uci("b5d6"))
+        self.white_move.append(chess.Move.from_uci("d6e8"))
 
         # make sure stockfish environment variable exists
         if STOCKFISH_ENV_VAR not in os.environ:
@@ -201,15 +208,28 @@ class ImprovedAgent(Player):
 
             return best_senses[0]
 
-        
+        print("It's choosing randomly in use_stockfish")
         return random.choice(sense_actions)
 
     def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> \
             Optional[Square]:
         print(f"In choose_sense {len(self.board_states)}")
 
+        # Always make these the first senses as stockfish is most likely to play these moves first
+        if self.color == chess.WHITE:
+            if self.move_number == 1:
+                print("preset sense e6")
+                return chess.parse_square("e6")
+        else:
+            if self.move_number == 0:
+                print("preset sense e3")
+                return chess.parse_square("e3")
+            elif self.move_number == 1 and self.scholars_valid == True:
+                pass
+
         # if our piece was just captured, sense where it was captured
         if self.my_piece_captured_square:
+            print("-----My piece was just captrured-----")
             return self.my_piece_captured_square
 
         # if we might capture a piece when we move, sense where the capture will occur
@@ -252,6 +272,20 @@ class ImprovedAgent(Player):
 
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
         print(f"In choose_move {len(self.board_states)}")
+       
+
+        # if self.turn_number == 0:
+        #     return [chess.Move.from_uci("b1c3")]
+        #     # self.white_move.append(chess.Move.from_uci("c3b5"))
+        #     # self.white_move.append(chess.Move.from_uci("b5d6"))
+            # self.white_move.append(chess.Move.from_uci("d6e8"))
+
+
+      # If playing as white, execute the predefined rush moves
+        if self.color == chess.WHITE and self.move_number < len(self.white_move):
+            print("Attempting to kill king with move: ", self.move_number)
+            return self.white_move[self.move_number]
+        
 
         # Limit the number of possible states
         if len(self.board_states) > STATE_LIMIT:
@@ -283,6 +317,7 @@ class ImprovedAgent(Player):
                                     if score is not None and score.white().score(mate_score=32000) > best_score:
                                         best_move = move
                                         best_score = score.white().score(mate_score=32000)
+                                    print("*Evasive maneuvre to get the king out of check*")
                                 except (chess.engine.EngineTerminatedError, chess.engine.EngineError):
                                     pass
                     if best_move != None:
@@ -321,6 +356,8 @@ class ImprovedAgent(Player):
     def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move],
                            captured_opponent_piece: bool, capture_square: Optional[Square]):
         print(f"In handle_move_result {len(self.board_states)}")
+        
+        self.move_number += 1
         
         new_states = set()
         # if a move was executed, apply it to all board states
