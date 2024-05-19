@@ -224,8 +224,6 @@ class ImprovedAgent(Player):
             if self.move_number == 0:
                 print("preset sense e3")
                 return chess.parse_square("e3")
-            elif self.move_number == 1 and self.scholars_valid == True:
-                pass
 
         # if our piece was just captured, sense where it was captured
         if self.my_piece_captured_square:
