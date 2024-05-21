@@ -1,0 +1,16 @@
+Games:
+
+Trout Vs Improved: 0-2
+Random Vs Improved: 0-2
+RandomSense Vs Improved: 0-2
+
+
+RendomSensing Vs Trout: 1-1
+Random Vs Trout: 0-2
+
+Random Vs Random Sensing: 0-2
+
+Improved_Bot: Wins: 6 Losses: 0 Winrate: 100%
+Trout_Bot: Wins: 3 Losses: 3 Winrate: 50%
+RandomSensing: Wins: 3 Losses: 3 Winrate: 50%
+Random: Wins: 0 Losses: 6 Winrate: 0%
